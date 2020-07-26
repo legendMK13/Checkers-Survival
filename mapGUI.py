@@ -2,10 +2,11 @@ import tkinter as tk
 
 #GUI Map Definition - Enlarged Map and Mini-Map
 
+#Use start_large_map_IO for enlarged map and start_mini_map_IO for mini map
+#They are the very last functions at the bottom
+
 #The Mini-Map will be displayed at bottom-left of UI during normal gameplay
 #Enlarged Map displayed upon user input
-
-#note that mini-map has not yet been implemented
 
 #Key Variables and Rules Used to Display Enlarged Map (only):
 #   each room takes maximum of 80x80 including paths in all directions
@@ -90,26 +91,32 @@ def display_path(canvas, direction, x, y):
     elif direction == 'W':
         canvas.create_line(x-21, y, x-39, y) #Left
 
-def display_room(canvas, x, y, flag=False):
+def display_room(canvas, room, x, y, flag=False):
     #Prints a room onto window. Takes its center and prints it according to
     #   standard boundaries
 
-    #Flag is True if player is in that room.    
+    #Flag is True if player is in that room.
+    #Symbol is the symbol of e.g. an animal/item/etc in the map
+    
     #Remember x and y are mark the center of the room shape
+    symbol = '?'
+    if room.get_seen() == True:
+        symbol = None
     if flag == False:
         canvas.create_rectangle(x-20, y-20, x+20, y+20, outline="#fb0",
                                 fill="#000")
     else:
         canvas.create_rectangle(x-20, y-20, x+20, y+20, outline="#fb0",
                                 fill="#fb0")
+    canvas.create_text(x, y, text=symbol, fill='#fff')
 
 def display_level(canvas, room, location, x, y, prev_dir=None):
     #room is the current room being examined to be printed
     #x and y are mark the center of the room shape
     if room == location:
-        display_room(canvas, x, y, True)
+        display_room(canvas, room, x, y, True)
     else:
-        display_room(canvas, x, y, False)
+        display_room(canvas, room, x, y, False)
     paths = room.get_existing_paths()
     if prev_dir != None:
         opposite_dir = {
@@ -124,19 +131,35 @@ def display_level(canvas, room, location, x, y, prev_dir=None):
         next_position = nxt_room_position(path, x, y)
         display_level(canvas, room.get_adjacent_room(path), location, 
                       next_position[0], next_position[1], path)
-    print('HERE')
     return
 
-def start_small_map_IO(location):
+def start_mini_map_IO(root, location):
     #location is the player's current location (room)
+    canvas = tk.Canvas(root, width=170, height=170, highlightthickness=0)
+    canvas.config(bg='#3b444b')
+    canvas.create_oval(0,0,170,170, fill="#999")
+    x=85
+    y=85
+    display_room(canvas, location, x, y, True)
+    for path in location.get_existing_paths():
+        display_path(canvas, path, x, y)
+        nxt_position = nxt_room_position(path, x, y)
+        display_room(canvas, location.get_adjacent_room(path), nxt_position[0], 
+                     nxt_position[1], False)
+    canvas.pack(anchor='sw', side='bottom')
     return
 
 def start_large_map_IO(level, location):
     #Defines the Enlarged Map Window and Creates the Canvas to generate map
     root = tk.Tk(className=" Map")
-    root.geometry("1080x680")
-    canvas = tk.Canvas(root, width=1040, height=610)
+    root.config(bg='#3b444b')
+    root.geometry("1080x800")
+    canvas = tk.Canvas(root, width=1040, height=610, highlightthickness=0)
+    canvas.config(bg='#3b444b')
     
+    title = tk.Label(root, text="Map",font=("Courier",50), fg='white',
+                     bg='#3b444b')
+    title.pack()
     vert_scroll = tk.Scrollbar(root, orient='vertical')
     vert_scroll.pack(side='right', fill='y')
     hori_scroll = tk.Scrollbar(root, orient='horizontal')
@@ -145,10 +168,11 @@ def start_large_map_IO(level, location):
     #Print pivot first at CENTER of window, then display the rest
     pivot = locate_pivot(level)
     x = 525 #center of the screen on x-axis
-    y = 305 #center of the screen on y-axis
+    y = 290 #center of the screen on y-axis
     display_level(canvas, pivot, location, x, y)
     canvas.pack()
     
-    returnButton = tk.Button(root, text="OK", padx=50, command=root.destroy)
+    returnButton = tk.Button(root, text="OK", padx=80, pady=10, command=root.destroy,
+                             bg='#cc5500', fg='white')
     returnButton.pack(side='bottom')
     root.mainloop()
