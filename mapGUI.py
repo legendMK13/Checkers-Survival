@@ -2,6 +2,10 @@ import tkinter as tk
 
 #GUI Map Definition - Enlarged Map and Mini-Map
 
+
+# TODO: New window upon clicking or hovering over a room in map
+
+
 #Use start_large_map_IO for enlarged map and start_mini_map_IO for mini map
 #They are the very last functions at the bottom
 
@@ -99,16 +103,25 @@ def display_room(canvas, room, x, y, flag=False):
     #Symbol is the symbol of e.g. an animal/item/etc in the map
     
     #Remember x and y are mark the center of the room shape
-    symbol = '?'
-    if room.get_seen() == True:
-        symbol = None
+    symbol = ''
+    if room.get_character() != None:
+        symbol += room.get_character().get_name() + '\n'
+    if room.get_animal() != None:
+        symbol += room.get_animal().get_name() + '\n'
+    if room.get_item() != None:
+        symbol += room.get_item().get_name() + '\n'
+    if room.get_next_level() == True:
+        symbol += 'NXT-LVL\n'
+    if room.get_seen() == False:
+        symbol = '?'
+    
     if flag == False:
         canvas.create_rectangle(x-20, y-20, x+20, y+20, outline="#fb0",
                                 fill="#000")
     else:
         canvas.create_rectangle(x-20, y-20, x+20, y+20, outline="#fb0",
                                 fill="#fb0")
-    canvas.create_text(x, y, text=symbol, fill='#fff')
+    canvas.create_text(x, y, text=symbol, font=("sans serif", 9), fill='#fff')
 
 def display_level(canvas, room, location, x, y, prev_dir=None):
     #room is the current room being examined to be printed
@@ -131,7 +144,6 @@ def display_level(canvas, room, location, x, y, prev_dir=None):
         next_position = nxt_room_position(path, x, y)
         display_level(canvas, room.get_adjacent_room(path), location, 
                       next_position[0], next_position[1], path)
-    return
 
 def start_mini_map_IO(root, location):
     #location is the player's current location (room)
@@ -147,7 +159,6 @@ def start_mini_map_IO(root, location):
         display_room(canvas, location.get_adjacent_room(path), nxt_position[0], 
                      nxt_position[1], False)
     canvas.pack(anchor='sw', side='bottom')
-    return
 
 def start_large_map_IO(level, location):
     #Defines the Enlarged Map Window and Creates the Canvas to generate map
@@ -172,7 +183,7 @@ def start_large_map_IO(level, location):
     display_level(canvas, pivot, location, x, y)
     canvas.pack()
     
-    returnButton = tk.Button(root, text="OK", padx=80, pady=10, command=root.destroy,
-                             bg='#cc5500', fg='white')
+    returnButton = tk.Button(root, text="OK", padx=80, pady=10, 
+                             command=root.destroy, bg='#cc5500', fg='white')
     returnButton.pack(side='bottom')
     root.mainloop()

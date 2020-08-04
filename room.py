@@ -1,47 +1,40 @@
-import random
+from random import *
+from NPCs import *
 import tkinter as tk
 from mapGUI import *
 
-random.seed()
+# TODO: Room descriptions (short description) needs the landscape description
+
+#changes:
+    # changed the room descriptions such that shrt_desc only gives the landscape 
+    # e.g. 'Dark Forest'. long_desc gives a sentence e.g. 'You are in a Dark 
+    # Forest.' 
+    # However, the functions that return them are different. get_shrt_desc 
+    # returns the short description as is, but get_long_desc returns the room's 
+    # long_desc, the contents' descriptions, and the shrt_desc of the adjacent 
+    # rooms that have been seen.
 
 
 class Room: 
-    # Variables:
-    #   long_desc -> printed in-game when within the room
-    #   shrt_desc -> printed in-game when in a room adjacent to this room
-    #   N,S,E,W   -> point to adjacent room in respective direction (in 2D)
-    #                set to None (null) if not yet defined
-    #   x and y   -> rough position of the room, to prevent overlaps between
-    #                rooms.
-    #   seen      -> T/F; T if it has been looked at or entered. Default is F.
-    #                if T, its contents appear in map; if F, a ? appears
     
-    # Functions:
-    #   all variables in the class can be obtained and/or changed with the
-    #   functions below. A short explanation of each function is provided.
-    
-    # Example of Room Class Use:
-    #   print(room_1.get_long_desc())
-    #   print(room_1.get_shrt_desc())
-    #   room_1.apply_long('goin don know')
-    #   room_1.apply_path('N', room_2)
-    #   print(room_1.__dict__) to print all class vars
-    
-    def __init__(self, x=0, y=0, long_desc='Standard Room',
-                 shrt_desc='Standard', N=None, S=None, E=None, W=None,
-                 character=None, animal=None):
+    def __init__(self, level_num, x=0, y=0, long_desc='You are in Standard Room',
+                 shrt_desc='Standard', N=None, S=None, E=None, W=None):
         """
         Creates a Room object that can be added to the level map.
-        :param x:
-        :param y:
+        :param x: room's position (y axis), to prevent overlaps between rooms
+        :param y: room's position (y axis), to prevent overlaps between rooms
         :param long_desc: string displayed by here command
         :param shrt_desc: string displayed by look command
         :param N: adjacent Room object to the north
         :param S: adjacent Room object to the south
         :param E: adjacent Room object to the east
         :param W: adjacent Room object to the west
+        :param seen: if Room has been looked at or entered (T/F). If T, Room's
+                     contents e.g. animal can be seen. Otherwise '?' appears
         :param character: Character object located in Room
         :param animal: Animal object located in Room
+        :param item: Item object located in Room
+        :param next_level: If True, allows user to progress to next level
         """
         self.x = x
         self.y = y
@@ -52,8 +45,10 @@ class Room:
         self.E = E
         self.W = W
         self.seen = False
-        self.character = character
-        self.animal = animal
+        self.character = gen_character(level_num)
+        self.animal = gen_animal(level_num)
+        self.item = gen_item(level_num)
+        self.next_level = False
     
     def apply_position(self, x, y):
         self.x = x
@@ -99,15 +94,44 @@ class Room:
             return False
     
     def apply_seen(self, state=True):
-        #default is True because this will mostly be called to set seen to T
+        # default is True because this will mostly be called to set seen to T
         self.seen = state
+        
+    def apply_next_level(self, state=True):
+        self.next_level = state
     
     def get_position(self):
         return [self.x, self.y]
     
     def get_long_desc(self):
         # returns the long description of the room
-        return self.long_desc
+        # Print current room's long description
+        
+        desc = self.long_desc + '\n'
+        # If present, print character's description
+        if self.character is not None:
+            desc += self.character.get_description() + '\n'
+        # If present, print animal's description.
+        if self.animal is not None:
+            desc += self.animal.get_description() + '\n'
+        # If present, print item's name.
+        if self.item is not None:
+            item_name = self.item.get_name()
+            desc += "You spot "
+            if item_name[-1] == 'S':
+                desc += "some "
+            else:
+                desc += "a "
+            desc += item_name + ".\n"
+        
+        # get seen rooms' short descriptions
+        for path in self.get_existing_paths():
+            adj_room = self.get_adjacent_room(path)
+            if adj_room is not None:
+                if adj_room.get_seen():
+                    desc += 'To the ' + path + ' you see '
+                    desc += adj_room.get_shrt_desc() + '\n'
+        return desc
  
     def get_shrt_desc(self):
         # returns the short description of the room
@@ -118,11 +142,23 @@ class Room:
 
     def get_animal(self):
         return self.animal
+
+    def remove_animal(self):
+        self.animal = None
+        
+    def get_item(self):
+        return self.item
+
+    def remove_item(self):
+        self.item = None
     
     def get_adjacent_room(self, direction):
         # pass direction eg 'N' ie North, and it returns the room N of self. If
         # there's no room to the N, then it returns None (the default value)
         return getattr(self, direction)
+    
+    def get_next_level(self):
+        return self.next_level
     
     def get_existing_paths(self):  # used for level display
         # returns an array with all paths/directions that have an assigned room
@@ -191,7 +227,7 @@ def create_path(level, parent, target, paths):
         'W': 'E'
     }
     if paths:
-        idx = random.randint(0,len(paths)-1)  # randomise direction
+        idx = randint(0, len(paths) - 1)  # randomise direction
         direction = paths[idx]
         
         position = parent.get_position()
@@ -212,12 +248,12 @@ def create_path(level, parent, target, paths):
         return False
 
 
-def gen_random_level(room_num):
+def gen_random_level(room_num, level_num):
     # see Concept above for better understanding of function
     all_rooms = []
     avail_rooms = []  # has index of rooms with an available path
     for i in range(0, room_num):
-        all_rooms.append(Room())  # create the new room (target)
+        all_rooms.append(Room(level_num))  # create the new room (target)
         avail_rooms.append(i)
         if i == 0:
             continue
@@ -227,16 +263,13 @@ def gen_random_level(room_num):
             if i == 1:  # 2 rooms only
                 parent = all_rooms[0]
             if i > 1:  # more than 2 rooms
-                idx = random.randint(0,len(avail_rooms)-2)
+                idx = randint(0,len(avail_rooms)-2)
                 parent = all_rooms[avail_rooms[idx]]
             avail_paths = parent.get_empty_paths()  # parent's available paths
             flag = create_path(all_rooms, parent, all_rooms[i], avail_paths)
             if flag is False:
                 if idx in avail_rooms:       # remove room from
                     avail_rooms.remove(idx)  # 'bunch'-paths filled
-    # for i in range(0, room_num):
-        # print(all_rooms[i])
-        # print(all_rooms[i].__dict__)
-        # print('')
-    # print(avail_rooms)
+    #choose room with 'next_level' event allowing user to progress to nxt lvl
+    all_rooms[randint(0, room_num-1)].apply_next_level(True)
     return all_rooms
