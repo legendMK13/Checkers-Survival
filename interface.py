@@ -1,15 +1,28 @@
-from tkinter import *
-import tkinter.font as tkFont
-import time
-
 from player import *
-from main import *
-from copy import deepcopy
+from tkinter import *
+from mapGUI import start_mini_map_IO
+import tkinter.font as tkFont
+import math
 
-import os
+'''
+Changes:
+    The player is initialized via passing the UI canvas ie canvas1 to player
+    class.
+    The UI can then be modified from there.
+    ********* Note: you can only call it once every element of canvas1 has been
+                    initialized.
+    see bottom of Game Settings for example
+        
+How to Print to the UI from interface.py:
+    pass string to print prompt below canvas1 definitions.
+'''
+
+#TODO: Keep refreshing and reprinting the:
+    #   1. Health
+    #   2. Time
+    #   3. Inventory
 
 root = Tk()
-
 
 ###Page Setup###
 root.config(bg='#3b444b')
@@ -330,6 +343,12 @@ c2.pack()
 
 #############################################################################
 ###GAME INTERFACE###
+def combine_funcs(*funcs):
+    def combined_func(*args, **kwargs):
+        for f in funcs:
+            f(*args, **kwargs)
+    return combined_func    
+
 #changes the color of the score
 def healthcolor():
     score = healthScore()
@@ -384,6 +403,9 @@ def searchDirection():
     player.get_user_input(cur_level, result)
     entry10.delete(0, END)
 
+    if player.get_location().get_next_level() == True:
+        prompt_move_nxt_level()
+
     midright.destroy()
     newMiniMap()
 
@@ -395,15 +417,94 @@ def newMiniMap():
     midright.pack()
     canvas1.create_window(730, 230, window=midright)
 
+#Directly prints a prompt to the dialog box to the left
+def print_prompt(value):
+    dialogleft = Canvas(canvas1, bg="#bbbbbb",width=550, height=600, highlightthickness=3, highlightbackground="black")
+    prompt = Text(dialogleft, height=35, width=65, bg="#bbbbbb", highlightthickness=0)
+    prompt.insert(END, value)
+    dialogleft.pack()
+    prompt.pack()
+    canvas1.create_window(300, 325, window=dialogleft)
 
+def identify_start_room(level):
+    #returns room with greatest distance from nxt_lvl event ie start_room
+    for room in level:
+        if room.get_next_level() == True:
+            nxt_lvl_room = room
+            break
+    nxt_lvl_position = nxt_lvl_room.get_position()
+    
+    #use below as standard in case there is only 1 room in level.
+    #otherwise it is bound to change
+    max_distance = 0
+    start_room = nxt_lvl_room 
+    
+    for room in set(level) - {nxt_lvl_room}:
+        room_position = room.get_position()
+        distance = math.hypot(nxt_lvl_position[0]-room_position[0],
+                              nxt_lvl_position[1]-room_position[1])
+        if distance > max_distance:
+            max_distance = distance
+            start_room = room
+    return start_room
+
+#handles the transition between levels
+def transition_new_level():
+    #FIXME: find a way to work without globals
+    #TODO: way of destroying or quitting once game is over
+    global cur_level, level_idx, player
+    level_idx+=1
+    
+    if level_idx < len(levels):
+        new_level = levels[level_idx]
+    else: #if all levels are complete
+        new_level = None
+    
+    if new_level == None: #all levels complete
+        print_prompt('All Levels Complete')
+        #root.destroy()
+    elif new_level != cur_level:
+        cur_level = new_level
+        player.set_start_position(identify_start_room(cur_level))
+
+#prompt user whether they want to move to the next level
+def prompt_move_nxt_level():
+    #Returns either True/False
+    response = Tk(className=" Progression")
+    response.config(bg='#3b444b')
+    title = Label(response, text='Advance to the next level?', pady=30,
+                  font=("Courier",12), fg='white', bg='#3b444b')
+    Yes = Button(response, text="Yes", padx=30, pady=5,
+                 command=combine_funcs(transition_new_level,response.destroy,
+                                       midright.destroy, newMiniMap),
+                 bg='#cc5500', fg='white', highlightthickness=0)
+    No = Button(response, text="No", padx=30, pady=5, command=response.destroy,
+                bg='#cc5500', fg='white', highlightthickness=0)
+    title.grid(row=0, columnspan=2)
+    Yes.grid(row=1, column=0)
+    No.grid(row=1, column=1)
+    
 #GAME SETTINGS
 
 ###Frames###
 f10 = Frame(root, bg='#3b444b')
-
 ###End Frames
-
 canvas1 = Canvas(f10, bg='#3b444b', width=900, height=700)
+
+level_size = [10, 12, 15, 18, 23]
+levels = [
+    gen_random_level(level_size[0], 1),
+    gen_random_level(level_size[1], 2),
+    gen_random_level(level_size[2], 3),
+    gen_random_level(level_size[3], 4),
+    gen_random_level(level_size[4], 5),
+]
+
+# Initialize first Level and Player
+level_idx = 0
+cur_level = levels[level_idx]
+player = Player(canvas1)
+player.set_start_position(identify_start_room(cur_level))
 
 #font for texts on screen
 font2 = tkFont.Font(family="Courier",size=13, weight="bold")
@@ -469,7 +570,12 @@ canvas1.create_window(730, 533, window=botright)
 
 canvas1.pack()
 
-# f10.pack()
+#********Examples of how we can print to UI*************
+# print_prompt('sbclkhjsbdcj bisub o;s')
+# player.print_prompt('uhbcibw')
+#*************************************
+
+#f10.pack()
 
 
 ###END GAME INTERFACE###
@@ -478,4 +584,3 @@ canvas1.pack()
 f1.pack()
 f6.pack_forget()
 root.mainloop()
-
