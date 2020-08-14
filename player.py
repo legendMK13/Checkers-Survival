@@ -2,14 +2,12 @@ from room import *
 from mapGUI import start_large_map_IO
 from tkinter import *
 
-# FIXME: "Map" command doesn't clear from the textbox. Doesn't act like other
-#  commands.
-
 
 class Player:
     def __init__(self, canvas):
         self._health = 100
         self.location = None
+        self._minutes_passed = 0
         self._weapon = create_knife()
         self._inventory = [create_medkit(1)]
         self.canvas = canvas  # the UI
@@ -19,13 +17,19 @@ class Player:
                             highlightthickness=3, highlightbackground="black")
         prompt = Text(dialogleft, height=35, width=65, bg="#bbbbbb", 
                       highlightthickness=0)
+        prompt.config(state=NORMAL)
         prompt.insert(END, value)
+        prompt.config(state=DISABLED)
         dialogleft.pack()
         prompt.pack()
         self.canvas.create_window(300, 325, window=dialogleft)
     
     def is_game_over(self):
         return self._health <= 0
+
+    def make_health_nonnegative(self):
+        if self._health < 0:
+            self._health = 0
    
     def move(self, dir_str):
         """
@@ -58,12 +62,14 @@ class Player:
             event = self.location.get_event()
             if event is not None:
                 self._health -= event()
+                self.make_health_nonnegative()
                 self.location.remove_event()
             adj_room.apply_seen()  # To view adjacent room contents in Maps
             self.location = adj_room
 
             # Check if player was killed by event.
             if not self.is_game_over():
+                self._minutes_passed += 240
                 self.here()
 
     def here(self):
@@ -107,10 +113,10 @@ class Player:
     
     def add_item(self, new_item):
         """Add the given item to the inventory."""
-        if new_item.get_type() == "CONSUMABLE":
-            for item in self._inventory:
-                if item.get_name() == new_item.get_name():
-                    # Add existing use count to new item use count
+        for item in self._inventory:
+            if item.get_name() == new_item.get_name():
+                # Add existing use count to new item use count
+                if new_item.get_type() == "CONSUMABLE":
                     new_item.adj_use_count(item.get_use_count())
                     self._inventory.remove(item)
 
@@ -123,6 +129,7 @@ class Player:
         if item is not None:
             self.add_item(item)
             self.location.remove_item()
+            self._minutes_passed += 15
             self.print_prompt("You picked up the " + item.get_name() + '.')
         else:
             self.print_prompt("There is nothing here to take.")
@@ -140,11 +147,7 @@ class Player:
 
                 else:
                     # Adjust the player's health and item's use count.
-                    self._health += item.get_health_gein()
-
-                    # Make sure current health doesn't exceed maximum of 100.
-                    if self._health > 100:
-                        self._health = 100
+                    self.adj_health(item.get_health_gein())
 
                     item.use_item()
 
@@ -153,6 +156,7 @@ class Player:
                         self._inventory.remove(item)
 
                     self.print_prompt("You used " + item.get_name() + ".")
+                    self._minutes_passed += 15
                     return
 
         self.print_prompt("You don't have that.")
@@ -194,8 +198,10 @@ class Player:
             # animal's damage and print message notifying player.
             if random() < animal.get_injure_chance():
                 self._health -= animal.get_damage()
+                self.make_health_nonnegative()
                 hunt_string += "You were hurt by the " + animal.get_name()
 
+        self._minutes_passed += 120
         self.print_prompt(hunt_string)
 
     def talk(self):
@@ -206,6 +212,7 @@ class Player:
         if character is not None:
             self.print_prompt("The " + character.get_name() + " greets you:\n" +
                               self.location.get_character().get_dialogue())
+            self._minutes_passed += 15
 
         else:
             self.print_prompt("There is no one here to talk to.")
@@ -242,9 +249,11 @@ class Player:
                                           item_offered.get_name() +
                                           " in return.\n\"Thanks for the " +
                                           "trade.\"")
+                        self._minutes_passed += 15
                         return
 
-                self.print_prompt("You don't have the correct item to trade.")
+                self.print_prompt("You don't have the correct item to trade." +
+                                  "\n\nCorrect item: " + item_wanted.get_name())
 
             else:
                 self.print_prompt("\"Sorry, I have nothing left to trade.\"")
@@ -271,7 +280,9 @@ class Player:
 
     def adj_health(self, amount):
         self._health += amount
-
+        if self._health >= 100:
+            self._health = 100
+            
     def equip(self, weapon_str):
         """
         Exchange the equipped weapon for the specified weapon in the inventory.
@@ -297,6 +308,7 @@ class Player:
             if self._weapon is not None:
                 self._inventory.append(self._weapon)
             self._weapon = weapon
+            self._minutes_passed += 15
             self.display_inventory()
 
         else:
@@ -306,6 +318,14 @@ class Player:
     def get_health(self):
         return self._health
 
+    def get_inventory(self):
+        items = []
+        for item in self._inventory:
+            items.append(item)
+        if self._weapon not in items:
+            items.append(self._weapon)
+        return items
+
     def get_weapon(self):
         return self._weapon
 
@@ -314,6 +334,26 @@ class Player:
     
     def get_location(self):
         return self.location
+
+    def get_time(self):
+        """
+        Returns the time passed in game as a string in the form "Day D, HH:MM"
+        """
+        total_minutes = self._minutes_passed
+        clock_minutes = str(total_minutes % 60)
+        if len(clock_minutes) == 1:
+            clock_minutes = "0" + clock_minutes
+
+        total_hours = total_minutes // 60
+        clock_hours = str(total_hours % 24)
+        if len(clock_hours) == 1:
+            clock_hours = "0" + clock_hours
+
+        days = str((total_hours // 24) + 1)
+
+        date_time = "Day " + days + ", " + clock_hours + ":" + clock_minutes
+
+        return date_time
 
     def get_user_input(self, level, text):
 
@@ -385,20 +425,27 @@ class Player:
         # Display help information about commands
         elif words[0] == "help":
 
+            general_help = "Commands: move, look, take, use, hunt, talk, trad" \
+                           "e, inventory,\nmap, status, here, help\nEnter \"h" \
+                           "elp\" followed by another command for instruction" \
+                           "s on\nusing the command.\nItems, Characters, and " \
+                           "NPCs that can be interacted with are\ndisplayed i" \
+                           "n ALL CAPS."
+
             if len(words) == 1:
-                self.print_prompt("Commands: move, look, take, use, hunt, " +
-                                  "talk, trade, inventory, \nmap, status, " +
-                                  "here, help\nItems, Characters, and NPCs " +
-                                  "that can be interacted with are " +
-                                  "\ndisplayed in ALL CAPS.")
+                self.print_prompt(general_help)
 
             elif words[1] == "move":
                 self.print_prompt("Usage: move <direction>\nMove to the " +
-                                  "location in the specified direction.")
+                                  "location in the specified direction." +
+                                  "\nValid directions are north, south, east," +
+                                  " and west (or n, s, e,\nand w).")
 
             elif words[1] == "look":
                 self.print_prompt("Usage: look <direction>\nLook in the " +
-                                  "specified direction.")
+                                  "specified direction.\nValid directions " +
+                                  "are north, south, east, and west (or n, " +
+                                  "s, e,\nand w).")
 
             elif words[1] == "take":
                 self.print_prompt("Usage: take\nTake the item in the current " +
@@ -444,11 +491,7 @@ class Player:
                                   "command help information.")
 
             else:
-                self.print_prompt("Commands: move, look, take, use, hunt, " +
-                                  "talk, trade, inventory, map, status, here," +
-                                  " help\nItems, Characters, and NPCs that " +
-                                  "can be interacted with are displayed in " +
-                                  "ALL CAPS.")
+                self.print_prompt(general_help)
 
         else:
             self.print_prompt(
